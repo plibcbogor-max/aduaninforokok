@@ -1,0 +1,290 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Pengaduan Rokok Ilegal - Bea Cukai Bogor</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; background-color: #f8f9fa;}
+        
+        #input-panel { width: 380px; background-color: #ffffff; padding: 20px; border-right: 2px solid #e0e0e0; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10;}
+        #map { flex-grow: 1; height: 100%; position: relative;}
+
+        .header-title { color: #2c3e50; margin-bottom: 0; font-size: 20px; font-weight: 800; text-transform: uppercase;}
+        .header-subtitle { color: #7f8c8d; margin-top: 5px; margin-bottom: 25px; font-size: 14px; font-weight: 600; letter-spacing: 1px;}
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 4px; font-weight: 600; color: #34495e; font-size: 13px;}
+        input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; transition: border-color 0.3s; font-family: inherit;}
+        textarea { resize: vertical; height: 60px; }
+        input[type="text"]:focus, textarea:focus { border-color: #3498db; outline: none; }
+        
+        button { background-color: #0d6efd; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 15px; font-weight: bold; transition: background 0.3s; margin-top: 10px;}
+        button:hover { background-color: #0b5ed7; }
+        button:disabled { background-color: #9ec5fe; cursor: not-allowed; }
+
+        .list-header { margin-top: 25px; border-top: 2px solid #f1f5f9; padding-top: 15px; font-weight: bold; color: #475569; font-size: 14px;}
+        #report-list { list-style: none; padding: 0; margin-top: 10px; }
+        #report-list li { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; color: #64748b; }
+        
+        #loading-status { display: none; margin-top: 15px; color: #b45309; background-color: #fef3c7; padding: 10px; border-radius: 6px; border: 1px solid #fde68a; text-align: center; font-size: 13px; font-weight: 600;}
+
+        .owner-mark { position: absolute; bottom: 20px; left: 20px; z-index: 1000; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: bold; color: #2c3e50; background-color: rgba(255, 255, 255, 0.7); padding: 5px 10px; border-radius: 4px; border: 1px solid #bdc3c7; pointer-events: none; }
+        
+        /* Gaya khusus untuk Tooltip Hover */
+        .leaflet-tooltip.custom-hover { background-color: rgba(44, 62, 80, 0.9); color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 13px; padding: 6px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .leaflet-tooltip.custom-hover::before { border-top-color: rgba(44, 62, 80, 0.9); } /* Segitiga panah */
+    </style>
+</head>
+<body>
+
+    <div id="input-panel">
+        <h2 class="header-title">PETA LAPORAN PENGADUAN ROKOK ILEGAL</h2>
+        <div class="header-subtitle">PLI BEA CUKAI BOGOR</div>
+        
+        <div class="form-group">
+            <label>Provinsi</label>
+            <input type="text" id="provinsi" value="Jawa Barat">
+        </div>
+        <div class="form-group">
+            <label>Kota/Kabupaten *</label>
+            <input type="text" id="kotakab" placeholder="Contoh: Kabupaten Bogor" required>
+        </div>
+        <div class="form-group">
+            <label>Kecamatan *</label>
+            <input type="text" id="kecamatan" placeholder="Contoh: Cibinong" required>
+        </div>
+        <div class="form-group">
+            <label>Kelurahan/Desa</label>
+            <input type="text" id="kelurahan" placeholder="Opsional">
+        </div>
+        <div class="form-group">
+            <label>Keterangan / Info Tambahan</label>
+            <textarea id="keterangan" placeholder="Contoh: Toko ABC menjual rokok tanpa pita cukai"></textarea>
+        </div>
+        
+        <button id="add-btn" onclick="addReport()">Simpan ke Database Peta</button>
+        
+        <div id="loading-status">Sedang memproses ke server...</div>
+
+        <div class="list-header">Sinkronisasi Database Aktif</div>
+        <ul id="report-list"></ul>
+    </div>
+
+    <div id="map">
+        <div class="owner-mark">-FOK</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // =========================================================
+        // MASUKKAN URL GOOGLE APPS SCRIPT ANDA DI BAWAH INI
+        // =========================================================
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbzGQS7kL0g6U5jNZwXbfZQeXNcAlnlYq0Zsu2ttv8EPP8a04xjOmhQff1efCPzIWPSM/exec'; 
+
+        var map = L.map('map', { zoomControl: false }).setView([-6.5950, 106.7890], 11);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        var markerGroup = L.layerGroup().addTo(map);
+        var reportsData = [];
+
+        // Memuat data dari Google Sheets saat halaman dibuka
+        window.onload = function() {
+            loadDataFromGoogle();
+        };
+
+        async function loadDataFromGoogle() {
+            document.getElementById('loading-status').style.display = "block";
+            document.getElementById('loading-status').innerText = "Mengambil data dari server...";
+            
+            try {
+                if (scriptURL === 'MASUKKAN_URL_WEB_APP_ANDA_DISINI') {
+                    document.getElementById('loading-status').innerText = "Silakan masukkan URL API Sheets terlebih dahulu di kode script.";
+                    return;
+                }
+
+                let response = await fetch(scriptURL);
+                let data = await response.json();
+                reportsData = data; // Sinkronisasi data lokal dengan Google Sheets
+                renderAllMarkers();
+                updateReportList();
+            } catch (error) {
+                console.error("Gagal load data:", error);
+                document.getElementById('loading-status').innerText = "Gagal memuat database.";
+            } finally {
+                setTimeout(() => { document.getElementById('loading-status').style.display = "none"; }, 2000);
+            }
+        }
+
+        async function addReport() {
+            var prov = document.getElementById('provinsi').value.trim();
+            var kota = document.getElementById('kotakab').value.trim();
+            var kec = document.getElementById('kecamatan').value.trim();
+            var kel = document.getElementById('kelurahan').value.trim();
+            var ket = document.getElementById('keterangan').value.trim();
+            var addBtn = document.getElementById('add-btn');
+            var status = document.getElementById('loading-status');
+
+            if (kota === "" || kec === "") {
+                alert("Kota/Kabupaten dan Kecamatan wajib diisi!");
+                return;
+            }
+
+            addBtn.disabled = true;
+            status.style.display = "block";
+            status.innerText = "Mencari titik koordinat...";
+
+            var addressString = (kel ? kel + ", " : "") + kec + ", " + kota + ", " + prov + ", Indonesia";
+
+            try {
+                // 1. Cari Koordinat di API Nominatim
+                var nominatimRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressString)}&limit=1`);
+                var results = await nominatimRes.json();
+
+                if (results && results.length > 0) {
+                    var lat = parseFloat(results[0].lat);
+                    var lon = parseFloat(results[0].lon);
+                    var locationId = (kota + kec + kel).toLowerCase().replace(/[\s,]/g, '');
+
+                    // Siapkan form data untuk dikirim ke Google Apps Script
+                    status.innerText = "Menyimpan ke Google Sheets...";
+                    var formData = new URLSearchParams({
+                        provinsi: prov,
+                        kota: kota,
+                        kecamatan: kec,
+                        kelurahan: kel,
+                        keterangan: ket,
+                        lat: lat,
+                        lon: lon,
+                        locationId: locationId
+                    });
+
+                    // 2. Kirim data ke Google Sheets
+                    await fetch(scriptURL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData
+                    });
+
+                    // Sukses! Bersihkan form dan muat ulang data dari server
+                    document.getElementById('kecamatan').value = '';
+                    document.getElementById('kelurahan').value = '';
+                    document.getElementById('keterangan').value = '';
+                    
+                    map.setView([lat, lon], 13);
+                    loadDataFromGoogle(); // Refresh peta
+
+                } else {
+                    alert("Lokasi tidak ditemukan. Coba periksa ejaan Anda.");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Terjadi kesalahan sistem atau koneksi.");
+            } finally {
+                addBtn.disabled = false;
+                status.style.display = "none";
+            }
+        }
+
+        function renderAllMarkers() {
+            markerGroup.clearLayers();
+
+            var uniqueLocations = {};
+            
+            // Mengelompokkan data berdasarkan Location ID untuk menghitung jumlah dan mengumpulkan keterangan
+            reportsData.forEach(function(r) {
+                var cleanAddressName = r.kelurahan ? r.kelurahan + ", " + r.kecamatan : r.kecamatan;
+                
+                if (!uniqueLocations[r.locationId]) {
+                    uniqueLocations[r.locationId] = {
+                        displayName: cleanAddressName,
+                        fullInput: `Kel. ${r.kelurahan || '-'}, Kec. ${r.kecamatan}, ${r.kota}`,
+                        lat: r.lat,
+                        lon: r.lon,
+                        count: 0,
+                        keteranganList: []
+                    };
+                }
+                
+                uniqueLocations[r.locationId].count++;
+                
+                if (r.keterangan && r.keterangan !== "") {
+                    // Masukkan keterangan dengan memotong format tanggal agar lebih rapi
+                    let dateStr = new Date(r.timestamp).toLocaleDateString('id-ID');
+                    uniqueLocations[r.locationId].keteranganList.push(`<i>[${dateStr}]</i> ${r.keterangan}`);
+                }
+            });
+
+            for (var id in uniqueLocations) {
+                var loc = uniqueLocations[id];
+                var calculatedRadius = 8 + ((loc.count - 1) * 6); 
+
+                // Membuat List Keterangan untuk Popup Klik
+                var ketHtml = loc.keteranganList.length > 0 
+                    ? `<div style="text-align:left; font-size:11px; margin-top:10px; max-height:100px; overflow-y:auto; background:#f8f9fa; padding:5px; border-radius:4px; border:1px solid #ddd;">
+                       <strong>Catatan:</strong><br>${loc.keteranganList.join('<br><hr style="margin:4px 0;">')}</div>` 
+                    : "";
+
+                var popupText = `
+                    <div style="text-align:center; font-family:sans-serif; min-width:150px;">
+                        <strong style="font-size:14px; color:#2c3e50;">${loc.displayName.toUpperCase()}</strong><br>
+                        <span style="font-size:11px; color:#7f8c8d;">${loc.fullInput}</span><br>
+                        <hr style="margin:8px 0; border:0; border-top:1px solid #ecf0f1;">
+                        <span style="font-size:12px;">Total Pengaduan:</span><br>
+                        <strong style="font-size:22px; color:#e74c3c;">${loc.count}</strong>
+                        ${ketHtml}
+                    </div>
+                `;
+
+                // Teks yang muncul saat Hover (Mouse Over)
+                var hoverText = `<strong>${loc.displayName.toUpperCase()}</strong><br>${loc.count} Laporan`;
+
+                var marker = L.circleMarker([loc.lat, loc.lon], {
+                    radius: calculatedRadius,
+                    fillColor: "#e74c3c", 
+                    color: "#c0392b", 
+                    weight: 2,
+                    opacity: 0.9,
+                    fillOpacity: 0.6 
+                });
+
+                // Memasang Hover Tooltip
+                marker.bindTooltip(hoverText, {
+                    direction: 'top', 
+                    className: 'custom-hover',
+                    offset: [0, -10]
+                });
+
+                // Memasang Popup Klik
+                marker.bindPopup(popupText);
+                
+                markerGroup.addLayer(marker);
+            }
+        }
+
+        function updateReportList() {
+            var listHtml = "";
+            var totalData = reportsData.length;
+            listHtml += `<li style="text-align:center; background:#e2e8f0; font-weight:bold;">Total Data di Server: ${totalData}</li>`;
+            
+            var lastReports = reportsData.slice(-5).reverse();
+            lastReports.forEach(function(r) {
+                let shortDate = new Date(r.timestamp).toLocaleDateString('id-ID');
+                let addr = r.kelurahan ? r.kelurahan : r.kecamatan;
+                listHtml += `<li><b>${addr}</b><br><span style="font-size:10px; color:#94a3b8;">${shortDate} - ${r.keterangan || 'Tanpa keterangan'}</span></li>`;
+            });
+            
+            document.getElementById('report-list').innerHTML = listHtml;
+        }
+    </script>
+</body>
+</html>
